@@ -115,13 +115,13 @@ TensorRTEdgeClassifier::TensorRTEdgeClassifier(
   }
 
   m_maxNodes =
-      m_engine->getProfileShape("x", 0, nvinfer1::OptProfileSelector::kMAX)
+      m_engine->getProfileShape("node_features", 0, nvinfer1::OptProfileSelector::kMAX)
           .d[0];
   ACTS_INFO("Maximum number of nodes: " << m_maxNodes);
 
   auto maxEdgesA =
       m_engine
-          ->getProfileShape("edge_index", 0, nvinfer1::OptProfileSelector::kMAX)
+          ->getProfileShape("edge_list", 0, nvinfer1::OptProfileSelector::kMAX)
           .d[1];
   auto maxEdgesB =
       m_engine
@@ -130,7 +130,7 @@ TensorRTEdgeClassifier::TensorRTEdgeClassifier(
 
   if (maxEdgesA != maxEdgesB) {
     throw std::invalid_argument(
-        "Inconsistent max edges definition in engine for 'edge_index' and "
+        "Inconsistent max edges definition in engine for 'edge_list' and "
         "'edge_attr'");
   }
 
@@ -183,15 +183,15 @@ PipelineTensors TensorRTEdgeClassifier::operator()(
   }
 
   context->setInputShape(
-      "x", nvinfer1::Dims2{static_cast<long>(tensors.nodeFeatures.shape()[0]),
+      "node_features", nvinfer1::Dims2{static_cast<long>(tensors.nodeFeatures.shape()[0]),
                            static_cast<long>(tensors.nodeFeatures.shape()[1])});
-  context->setTensorAddress("x", tensors.nodeFeatures.data());
+  context->setTensorAddress("node_features", tensors.nodeFeatures.data());
 
   context->setInputShape(
-      "edge_index",
+      "edge_list",
       nvinfer1::Dims2{static_cast<long>(tensors.edgeIndex.shape()[0]),
                       static_cast<long>(tensors.edgeIndex.shape()[1])});
-  context->setTensorAddress("edge_index", tensors.edgeIndex.data());
+  context->setTensorAddress("edge_list", tensors.edgeIndex.data());
 
   if (tensors.edgeFeatures.has_value()) {
     context->setInputShape(

@@ -35,7 +35,8 @@ class ModuleMapCuda : public GraphConstructionBase {
     /// Pseudorapidity scaling factor
     float etaScale = 1.0;
 
-    /// Enable more parallel execution
+    /// @deprecated Has no effect and will be removed in a future release.
+    [[deprecated("moreParallel has no effect and will be removed")]]
     bool moreParallel = true;
     /// CUDA device ID
     int gpuDevice = 0;
@@ -44,6 +45,8 @@ class ModuleMapCuda : public GraphConstructionBase {
 
     /// Small numerical constant for stability
     float epsilon = 1e-8f;
+
+    bool debugSynchronize = false;
   };
 
   /// Constructor
