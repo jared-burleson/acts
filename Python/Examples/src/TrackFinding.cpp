@@ -94,7 +94,7 @@ void addTrackFinding(py::module& mex) {
       GraphBasedSeedingAlgorithm, mex, "GraphBasedSeedingAlgorithm",
       inputSpacePoints, outputSeeds, seedFinderConfig, layerMappingFile,
       connectorInputFile, lutInputFile, trackingGeometry, fillModuleCsv,
-      inputClusters, bFieldInZ);
+      inputClusters, bFieldInZ, magneticField, outputFreeParameters);
 
   ACTS_PYTHON_DECLARE_ALGORITHM(
       HoughTransformSeeder, mex, "HoughTransformSeeder", inputSpacePoints,
@@ -129,7 +129,7 @@ void addTrackFinding(py::module& mex) {
         magneticField, bFieldMin, spacePointSelection, minTransverseDistance,
         geometricRefineIterations, spacePointWeight, initialSigmas,
         initialSigmaQoverPt, initialSigmaPtRel, initialVarInflation,
-        noTimeVarInflation, particleHypothesis);
+        noTimeVarInflation, particleHypothesis, inputFreeParameters);
   }
 
   ACTS_PYTHON_DECLARE_ALGORITHM(

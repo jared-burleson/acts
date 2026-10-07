@@ -19,6 +19,7 @@ target_sources(
         TripletSeeder.cpp
         GbtsNodeStorage.cpp
         GbtsGeometry.cpp
+        GbtsSeedFit.cpp
         GbtsTrackingFilter.cpp
         GraphBasedTrackSeeder.cpp
         GbtsRoiDescriptor.cpp

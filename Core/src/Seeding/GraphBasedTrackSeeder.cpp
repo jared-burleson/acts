@@ -88,11 +88,10 @@ void GraphBasedTrackSeeder::createSeeds(const SpacePointContainer& spacePoints,
   createSeeds(nodeStorage, roi, filter, options, outputSeeds);
 }
 
-void GraphBasedTrackSeeder::createSeeds(GbtsNodeStorage& nodeStorage,
-                                        const GbtsRoiDescriptor& roi,
-                                        const GbtsTrackingFilter& filter,
-                                        const Options& options,
-                                        SeedContainer& outputSeeds) const {
+void GraphBasedTrackSeeder::createSeeds(
+    GbtsNodeStorage& nodeStorage, const GbtsRoiDescriptor& roi,
+    const GbtsTrackingFilter& filter, const Options& options,
+    SeedContainer& outputSeeds, std::vector<GbtsSeedFit>* outputFits) const {
   ACTS_DEBUG("Loaded " << nodeStorage.numberOfNodes() << " graph nodes");
 
   std::vector<detail::GbtsEdge> edgeStorage;
@@ -113,7 +112,7 @@ void GraphBasedTrackSeeder::createSeeds(GbtsNodeStorage& nodeStorage,
 
   std::vector<OutputSeedProperties> vOutputSeeds;
   extractSeedsFromTheGraph(graphStats.first, nodeStorage, edgeStorage,
-                           vOutputSeeds, filter);
+                           vOutputSeeds, filter, outputFits != nullptr);
 
   ACTS_DEBUG("GBTS created " << vOutputSeeds.size() << " seeds");
   if (vOutputSeeds.empty()) {
@@ -125,6 +124,9 @@ void GraphBasedTrackSeeder::createSeeds(GbtsNodeStorage& nodeStorage,
     auto newSeed = outputSeeds.createSeed();
     newSeed.assignSpacePointIndices(seed.spacePoints);
     newSeed.quality() = seed.seedQuality;
+    if (outputFits != nullptr) {
+      outputFits->push_back(seed.fit);
+    }
   }
 }
 
@@ -677,7 +679,7 @@ void GraphBasedTrackSeeder::extractSeedsFromTheGraph(
     std::uint32_t nEdges, const GbtsNodeStorage& nodeStorage,
     std::vector<detail::GbtsEdge>& edgeStorage,
     std::vector<OutputSeedProperties>& vOutputSeeds,
-    const GbtsTrackingFilter& filter) const {
+    const GbtsTrackingFilter& filter, const bool withFits) const {
   const detail::GbtsNodeView nodeView = nodeStorage.nodeView();
   const auto minLevel = static_cast<std::uint8_t>(m_cfg.minSeedLevel);
   // `addTriplets` accepts a chain one level short. Signed: an uncollected
@@ -844,6 +846,19 @@ void GraphBasedTrackSeeder::extractSeedsFromTheGraph(
 
     vSeedCandidates.emplace_back(origSeedQuality, false, vN, seedSplitFlag);
 
+    if (withFits) {
+      // filter state at the innermost node, x' along the first edge (inwards)
+      const double slope2 = 1. + double{rs.x[1]} * rs.x[1];
+      vSeedCandidates.back().fit = {
+          .valid = true,
+          .position = Vector3(rs.refX * rs.c - rs.x[0] * rs.s,
+                              rs.refX * rs.s + rs.x[0] * rs.c, rs.y[0]),
+          // outwards: along -x', with the slope of the state
+          .phi = std::atan2(-rs.s - rs.c * rs.x[1], -rs.c + rs.s * rs.x[1]),
+          .cotTheta = rs.y[1],
+          .curvature = rs.x[2] / (slope2 * std::sqrt(slope2))};
+    }
+
     vArgSort.emplace_back(origSeedQuality, seedCounter);
 
     ++seedCounter;
@@ -930,6 +945,9 @@ void GraphBasedTrackSeeder::extractSeedsFromTheGraph(
       }
 
       vOutputSeeds.emplace_back(seed.seedQuality, vSpIdx);
+      if (withFits) {
+        vOutputSeeds.back().fit = seed.fit;
+      }
 
       continue;
     }
