@@ -10,6 +10,9 @@
 
 #include "Acts/Utilities/Helpers.hpp"
 #include "ActsPlugins/Gnn/detail/NvtxUtils.hpp"
+#if defined(ACTS_GNN_WITH_CUDA) && defined(ACTS_GNN_WITH_MODULEMAP)
+#include "ActsPlugins/Gnn/ModuleMapCuda.hpp"
+#endif
 
 #ifdef ACTS_GNN_WITH_CUDA
 #include "ActsPlugins/Gnn/detail/CudaUtils.hpp"
@@ -126,5 +129,83 @@ std::vector<std::vector<int>> GnnPipeline::run(
     return {};
   }
 }
+
+#if defined(ACTS_GNN_WITH_CUDA) && defined(ACTS_GNN_WITH_MODULEMAP)
+CudaTrackBuilding::DeviceCandidates GnnPipeline::runOnDevice(
+    Tensor<float> nodeFeatures, const std::uint64_t *cudaModuleIds,
+    const int *cudaSpacePointIds, const ExecutionContext &ctx,
+    const GnnHook &hook, GnnTiming *timing) const {
+  if (!ctx.device.isCuda() || !ctx.stream.has_value()) {
+    throw std::invalid_argument("runOnDevice needs a CUDA device and stream");
+  }
+  auto *graphConstructor =
+      dynamic_cast<ModuleMapCuda *>(m_graphConstructor.get());
+  auto *trackBuilder = dynamic_cast<CudaTrackBuilding *>(m_trackBuilder.get());
+  if (graphConstructor == nullptr || trackBuilder == nullptr) {
+    throw std::invalid_argument(
+        "runOnDevice needs ModuleMapCuda graph construction and "
+        "CudaTrackBuilding");
+  }
+  if (m_shrinkNodes) {
+    throw std::invalid_argument("runOnDevice does not support shrinkNodes");
+  }
+  const auto numSpacePoints = nodeFeatures.shape()[0];
+
+  if (timing != nullptr) {
+    timing->classifierTimes.clear();
+  }
+
+  try {
+    auto t0 = std::chrono::high_resolution_clock::now();
+    ACTS_NVTX_START(graph_construction);
+    auto tensors =
+        graphConstructor->buildGraph(std::move(nodeFeatures), cudaModuleIds, ctx);
+    ACTS_NVTX_STOP(graph_construction);
+    auto t1 = std::chrono::high_resolution_clock::now();
+
+    if (timing != nullptr) {
+      timing->graphBuildingTime = t1 - t0;
+    }
+
+    hook(tensors, ctx);
+
+    for (const auto &edgeClassifier : m_edgeClassifiers) {
+      t0 = std::chrono::high_resolution_clock::now();
+      ACTS_NVTX_START(edge_classifier);
+      tensors = (*edgeClassifier)(std::move(tensors), ctx);
+      ACTS_NVTX_STOP(edge_classifier);
+      t1 = std::chrono::high_resolution_clock::now();
+
+      if (timing != nullptr) {
+        timing->classifierTimes.push_back(t1 - t0);
+      }
+
+      hook(tensors, ctx);
+    }
+
+    t0 = std::chrono::high_resolution_clock::now();
+    ACTS_NVTX_START(track_building);
+    auto res = trackBuilder->buildCandidates(
+        std::move(tensors), cudaSpacePointIds, numSpacePoints, ctx);
+    ACTS_NVTX_STOP(track_building);
+    t1 = std::chrono::high_resolution_clock::now();
+
+    if (timing != nullptr) {
+      timing->trackBuildingTime = t1 - t0;
+    }
+
+    return res;
+  } catch (NoEdgesError &) {
+    ACTS_DEBUG("No edges left in GNN pipeline, return 0 track candidates");
+    if (timing != nullptr) {
+      while (timing->classifierTimes.size() < m_edgeClassifiers.size()) {
+        timing->classifierTimes.push_back({});
+      }
+    }
+    return {Tensor<int>::Create({1, 1}, ctx), Tensor<int>::Create({1, 1}, ctx),
+            0};
+  }
+}
+#endif
 
 }  // namespace ActsPlugins

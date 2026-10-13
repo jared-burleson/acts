@@ -70,6 +70,19 @@ class ModuleMapCuda : public GraphConstructionBase {
                              const std::vector<std::uint64_t> &moduleIds,
                              const ExecutionContext &execContext = {}) override;
 
+  /// Graph construction from inputs that are already on the device
+  ///
+  /// @param nodeFeatures Node features [numNodes, numFeatures] on the device,
+  ///        ordered by module id
+  /// @param cudaModuleIds Module ids of the nodes (device pointer with
+  ///        numNodes entries)
+  /// @param execContext Device & stream information. The inputs must be
+  ///        ready on its stream.
+  /// @return (node_features, edge_features, edge_index)
+  PipelineTensors buildGraph(Tensor<float> nodeFeatures,
+                             const std::uint64_t *cudaModuleIds,
+                             const ExecutionContext &execContext);
+
  private:
   class Impl;
   std::unique_ptr<Impl> m_impl;
