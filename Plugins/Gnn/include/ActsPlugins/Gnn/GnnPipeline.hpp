@@ -10,6 +10,9 @@
 
 #include "Acts/Utilities/Logger.hpp"
 #include "ActsPlugins/Gnn/Stages.hpp"
+#if defined(ACTS_GNN_WITH_CUDA) && defined(ACTS_GNN_WITH_MODULEMAP)
+#include "ActsPlugins/Gnn/CudaTrackBuilding.hpp"
+#endif
 
 #include <chrono>
 #include <memory>
@@ -72,6 +75,29 @@ class GnnPipeline {
                                     std::vector<int> &spacePointIDs,
                                     Device device, const GnnHook &hook = {},
                                     GnnTiming *timing = nullptr) const;
+
+#if defined(ACTS_GNN_WITH_CUDA) && defined(ACTS_GNN_WITH_MODULEMAP)
+  /// @brief Run the GNN pipeline with inputs and outputs on the device
+  ///
+  /// Requires ModuleMapCuda graph construction and CudaTrackBuilding, and
+  /// does not support shrinkNodes. Everything runs on the stream of
+  /// @p execContext, which the caller owns, so that the returned device
+  /// memory stays valid after this call.
+  ///
+  /// @param nodeFeatures Node features [numNodes, numFeatures] on the device,
+  ///        ordered by module id
+  /// @param cudaModuleIds Module ids of the nodes (device pointer)
+  /// @param cudaSpacePointIds Space point ids of the nodes (device pointer)
+  /// @param execContext CUDA device and stream; the inputs must be ready on
+  ///        this stream
+  /// @param hook Optional callback hook for pipeline execution
+  /// @param timing Optional timing output
+  /// @return The track candidates, in device memory
+  CudaTrackBuilding::DeviceCandidates runOnDevice(
+      Tensor<float> nodeFeatures, const std::uint64_t *cudaModuleIds,
+      const int *cudaSpacePointIds, const ExecutionContext &execContext,
+      const GnnHook &hook = {}, GnnTiming *timing = nullptr) const;
+#endif
 
  private:
   std::unique_ptr<const Acts::Logger> m_logger;

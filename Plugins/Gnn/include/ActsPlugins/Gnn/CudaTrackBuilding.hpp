@@ -40,6 +40,31 @@ class CudaTrackBuilding final : public TrackBuildingBase {
   std::vector<std::vector<int>> operator()(
       PipelineTensors tensors, std::vector<int> &spacePointIDs,
       const ExecutionContext &execContext = {}) override;
+
+  /// Track candidates in device memory
+  struct DeviceCandidates {
+    /// Space point ids grouped by candidate (device, numSpacePoints entries)
+    Tensor<int> spacePointIds;
+    /// Candidate i is spacePointIds[bounds[i], bounds[i + 1]) (device,
+    /// numCandidates + 1 valid entries)
+    Tensor<int> bounds;
+    /// Number of candidates (connected components), without the
+    /// minCandidateSize selection
+    std::size_t numCandidates = 0;
+  };
+
+  /// Track building with the space point ids and the result on the device
+  ///
+  /// @param tensors Input pipeline tensors
+  /// @param cudaSpacePointIds IDs of the nodes (device pointer with n_nodes
+  ///        entries, ready on the stream of @p execContext)
+  /// @param numSpacePoints Number of nodes
+  /// @param execContext Device & stream information
+  /// @return The candidates, ready on the stream of @p execContext
+  DeviceCandidates buildCandidates(PipelineTensors tensors,
+                                   const int *cudaSpacePointIds,
+                                   std::size_t numSpacePoints,
+                                   const ExecutionContext &execContext);
   /// Get configuration
   /// @return Configuration object
   const Config &config() const { return m_cfg; }
